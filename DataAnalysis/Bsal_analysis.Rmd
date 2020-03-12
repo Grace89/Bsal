@@ -1,0 +1,732 @@
+---
+title: 'Bsal analysis'
+output:
+  html_document:
+    highlight: zenburn
+    theme: paper
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    toc: yes
+---
+
+```{r setup, include = FALSE, warning = FALSE}
+
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+
+if('pacman' %in% rownames(installed.packages()) == FALSE) {
+  install.packages('pacman', repos = "http://cran.case.edu")
+}
+
+pacman::p_load(knitr, markdown, kableExtra, actuar, rjags, MCMCvis, formatR)
+
+```
+
+## Upload and clean the data
+
+```{r}
+# Library
+library(ggplot2)
+library(plyr)
+library(lme4)
+library(emmeans)
+
+#------------- Reading in data
+Bsal <- read.table("~/Dropbox/Bsal_Summer_2015/Data/GVDBsal_Experiment_MASTER_25FEB2016.txt", header = T, sep = "\t")
+
+#--- Remove 2 individuals that never got infected
+Bsal<- Bsal[-which(Bsal$Species == "cylindraceus" & Bsal$ID_number == 6),]
+Bsal<- Bsal[-which(Bsal$Species == "viridescens" & Bsal$ID_number == 10),]
+
+# Drop the levels for the salamanders that never got infected
+Bsal <- droplevels(Bsal)
+
+# Make a colum with the genus and species names
+Bsal$Genus_species <- paste(Bsal$Genus, Bsal$Species, sep = " ")
+# Log10 transform Bd data
+Bsal$log10_Bd_t_minus_1 <- log10(Bsal$Bd_load_t_min_1+1)
+
+# Add a dummy variable "Num" to be able to tally up values
+Bsal$Num <- 1
+# Calculate mean zoospore loads for each species during the entirety of the experiment
+ddply(.data = Bsal, .variable = c("Genus", "Species", "Treatment"), .fun = summarize, 
+      samp.tot = length(unique(ID_number)),
+      Bsal = mean(Bsal, na.rm = T), 
+      Bd = mean(Bd, na.rm = T),
+      sum = sum(Num))
+
+# Average Bsal load of all species without newts
+mean(Bsal[Bsal$Species != "viridescens",]$Bsal, na.rm = TRUE)
+
+# Look at Bd infection from the day of collection in the field
+# Day of collection is coded as NA
+Field <- Bsal[is.na(Bsal$Exp_day) == TRUE, ]
+Field$Prev <- ifelse(Field$Bd > 0, 1, 0)
+# Calculate Bd, Bsal infection from the day of collection in the field
+ddply(.data = Field, .variable = c("Genus", "Species"), .fun = summarize, 
+      Bsal = mean(Bsal, na.rm = T), 
+      Bd = mean(Bd, na.rm = T),
+      sum = sum(Num),
+      Prev = sum(Prev, na.rm = TRUE)/sum(Num, na.rm = TRUE))
+# Calculate standard error of the Bd infection
+ddply(.data = Field, .variable = c("Genus", "Species"), .fun = summarize, 
+      Bd_SE = sd(Bd, na.rm=TRUE)/sqrt(length(Num)))
+
+# Remove entries with NA as Genus or Experimental day
+Bsal <- Bsal[is.na(Bsal$Genus) == FALSE,]
+Bsal <- Bsal[is.na(Bsal$Exp_day) == FALSE,]
+
+# Change the name organi to wrighti
+# This was inputted in the datasheet incorrectly
+Bsal$Species <- gsub("organi", "wrighti", Bsal$Species)
+# Change the name sp to wilderae
+# This was inputted in the datasheet incorrectly
+Bsal$Species <- gsub("sp", "wilderae", Bsal$Species)
+# Convert to a factor
+Bsal$Species <- as.factor(Bsal$Species)
+
+#----- Assign unique values to each salamander
+df <- unique(data.frame(Species = (Bsal$Species), ID_number = Bsal$ID_number))
+values <- data.frame(df, add = round(seq(1, 750, length = nrow(df))))
+BS <- merge(Bsal, values, all = TRUE)
+BS$ID_new <- as.numeric(BS$Species) + as.numeric(BS$ID_number) * BS$add
+BS$ID_new <- as.factor(BS$ID_new)
+
+# There were 101 salamanders caught in the field, but 99 were used in the analyses because 2 never got infected, although they were exposed
+length(unique(BS$ID_new))
+# copy over to the "Bsal" object
+Bsal <- BS
+
+#----- Make ID number factor
+Bsal$ID_number <- as.factor(Bsal$ID_number)
+Bsal$ID_new <- as.factor(Bsal$ID_new)
+
+#------ Standardize day
+# First inoculation
+first_part <- Bsal[Bsal$Exp_day < 40, ]
+first_part <- first_part[is.na(first_part$Bsal) == FALSE,]
+mE_first <- mean(first_part$Exp_day)
+sE_first <- sd(first_part$Exp_day)
+first_part$standard_day <- (first_part$Exp_day - mE_first)/sE_first
+# Second inoculation
+second_part <- Bsal[Bsal$Exp_day > 48, ]
+second_part <- second_part[is.na(second_part$Bsal) == FALSE,]
+mE_second <- mean(second_part$Exp_day)
+sE_second <- sd(second_part$Exp_day)
+second_part$standard_day <- (second_part$Exp_day - mE_second)/sE_second
+
+# Calculate the number of co-infected individuals
+# Was Bsal ever present on the individual? Determine if Bsal load is > 1
+Bsal$Bsal_PA <- ifelse(Bsal$Bsal > 0, 1, 0)
+# Was Bd ever present on the individual? Determine if Bd load is > 1
+Bsal$Bd_PA <- ifelse(Bsal$Bd > 0, 1, 0)
+# Add up the 2 columns
+  # If value = 1 -> single infection
+  # If value = 2 -> co-infected
+Bsal$coInfection <- Bsal$Bsal_PA + Bsal$Bd_PA
+
+# Determine which individuals were positive for Bd and Bsal at the SAME time
+coinf <- ddply(.data = Bsal, .variable = c("Genus", "Species", "add"), 
+               .fun = summarize, 
+                coinfected = max(coInfection, na.rm = TRUE))
+coinf[coinf == "-Inf"] <- NA
+length(which(coinf$coinfected == 2))
+# 36 of 99 salamanders
+36/72
+
+# Determine the number of individuals that were EVER positive for Bd 
+Bd <- ddply(.data = Bsal, .variable = c("Genus", "Species", "add"), 
+      .fun = summarize, 
+      Bd = max(Bd_PA, na.rm = TRUE))
+Bd[Bd == "-Inf"] <- NA
+length(which(Bd$Bd == 1))
+# 65 of 99 salamanders
+65/99
+
+# Average Bsal load on day 3 and 4
+mean(c(Bsal[Bsal$Exp_day == 3 & Bsal$Treatment == "I",]$Bsal_load,
+       Bsal[Bsal$Exp_day == 4 & Bsal$Treatment == "I",]$Bsal_load))
+# Standard error of Bsal load on day 3 and 4
+sd(c(Bsal[Bsal$Exp_day == 3 & Bsal$Treatment == "I",]$Bsal_load,
+       Bsal[Bsal$Exp_day == 4& Bsal$Treatment == "I",]$Bsal_load))/ sqrt(length(c(Bsal[Bsal$Exp_day == 3 & Bsal$Treatment == "I",]$Bsal_load,
+       Bsal[Bsal$Exp_day == 4 & Bsal$Treatment == "I",]$Bsal_load)))
+# Number of salamanders
+length(c(Bsal[Bsal$Exp_day == 3 & Bsal$Treatment == "I",]$Bsal_load,
+       Bsal[Bsal$Exp_day == 4& Bsal$Treatment == "I",]$Bsal_load))
+
+# Average Bsal load on day 81 (last swabbing day of the experiment)
+treat <- which(Bsal$Treatment == "I" | Bsal$Treatment == "D")
+last <- which(Bsal$Exp_day == 81)
+Bsal_last <- Bsal[match(last, treat),]
+Bsal_last <- Bsal_last[is.na(Bsal_last$Bsal_load) == FALSE,]
+mean(Bsal_last$Bsal_load, na.rm = TRUE)
+# Standard error of Bsal load on day 81 (last swabbing day of the experiment)
+sd(Bsal_last$Bsal_load)/ sqrt(length(Bsal_last$Bsal_load))
+
+# Average Bd load on day 3 and 4
+mean(c(Bsal[Bsal$Exp_day == 3 ,]$Bd_load,
+       Bsal[Bsal$Exp_day == 4,]$Bd_load), na.rm = TRUE)
+# Standard error of Bd load on day 3 and 4
+sd(c(Bsal[Bsal$Exp_day == 3,]$Bd,
+       Bsal[Bsal$Exp_day == 4,]$Bd), na.rm = TRUE)/ sqrt(length(c(Bsal[Bsal$Exp_day == 3,],
+       Bsal[Bsal$Exp_day == 4,])))
+
+# Average Bd load on day 81
+mean(c(Bsal[Bsal$Exp_day == 81,]$Bd_load), na.rm = TRUE)
+# Standard error of Bd load day 81
+sd(c(Bsal[Bsal$Exp_day == 81,]$Bd_load), na.rm = TRUE)/ sqrt(length(c(Bsal[Bsal$Exp_day == 81,]$Bd_load)))
+
+# Individual plots = Fig. S2
+# Bd load
+ggplot(data = Bsal, aes(y = log10(Bd_load+1), x = Exp_day))+
+  facet_grid(ID_number ~ Genus_species)+ geom_line()+geom_point()+
+  geom_vline(xintercept = 42, col = "red", lwd = 1)+
+  xlab("Experimental day")+
+  ylab(expression(paste(italic(Bd), " infection intensity", sep = "")))+
+  scale_y_continuous(breaks = c(log10(1), log10(10), log10(100), log10(1e3), log10(1e4), log10(1e5), log10(1e6)), 
+                                labels = c(1, 10, 100, 1e3, 1e4, 1e5, 1e6))+
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 10, color = "black"), 
+        axis.text.y = element_text(size = 9, color = "black"), 
+        axis.title.y = element_text(size = 12, color = "black"), 
+        axis.title.x = element_text(size = 12, color = "black"),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        legend.position = "none",
+        strip.text = element_text(size=11, face = "italic"),
+        strip.background = element_rect(fill = "white"))
+#ggsave("FigS2.pdf", height = 10, width = 17)
+
+# Fig. S3
+# Bsal load
+Bsal[Bsal$Treatment == "C",]$Bsal_load <- 0
+
+ggplot(data = Bsal, aes(y = log10(Bsal_load+1), x = Exp_day, col = Treatment))+
+  facet_grid(ID_number ~ Genus_species)+ geom_line()+geom_point()+
+  geom_vline(xintercept = 42, col = "red", lwd = 1)+
+  xlab("Experimental day")+
+  ylab(expression(paste(italic(Bsal), " infection intensity", sep = "")))+
+  scale_y_continuous(breaks = c(log10(1), log10(10), log10(100), log10(1e3), log10(1e4), log10(1e5), log10(1e6)), 
+                                labels = c(1, 10, 100, 1e3, 1e4, 1e5, 1e6))+
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 10, color = "black"), 
+        axis.text.y = element_text(size = 9, color = "black"), 
+        axis.title.y = element_text(size = 12, color = "black"), 
+        axis.title.x = element_text(size = 12, color = "black"),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        legend.position = "none",
+        strip.text = element_text(size=11, face = "italic"),
+        strip.background = element_rect(fill = "white"))
+setwd("~/Dropbox/Bsal_Summer_2015/")
+ggsave("FigS3.pdf", height = 10, width = 17)
+
+```
+
+## First inoculation: Bsal growth
+
+```{r}
+# Save the data into a new object before removing the controls
+first_part_all <- first_part
+# Remove all Control individuals
+first_part <- first_part[first_part$Treatment != "C",]
+# Remove control individuals
+first_part <- droplevels(first_part)
+# Fit a linear mixed effect model with ID number as a random effect
+mod <- lmer(log10(Bsal_load+1) ~ 
+             standard_day*(Species-1) + log10_Bd_t_minus_1 +
+             (1|ID_new), 
+           data = first_part,
+           control=lmerControl(optimizer="bobyqa",
+                                optCtrl=list(maxfun=1e6)))
+# Look at the summary
+summary(mod)
+# Compare the slopes of Bsal over time among species
+lst = emmeans::emtrends(mod, ~Species, var= "standard_day")
+slopes <- multcomp::cld(lst)
+slopes
+# Compare the slopes of Bd over time among species
+lst_Bd = emmeans::emtrends(mod, ~Species, var= "log10_Bd_t_minus_1")
+slopes_Bd <- multcomp::cld(lst_Bd)
+slopes_Bd
+
+```
+
+Plots
+```{r}
+# Combine genus species names
+first_part$G_S <- paste(first_part$Genus, first_part$Species, sep = " ")
+first_part$G_S <- as.factor(first_part$G_S)
+# Create new dataset
+plot_data <- with(first_part, expand.grid(
+      standard_day = seq(min(standard_day), max(standard_day), length = 100), 
+      Species = levels(Species), 
+      log10_Bd_t_minus_1 = mean(log10_Bd_t_minus_1, na.rm = TRUE),
+      ID_new = levels(ID_new)
+))
+# Backtransform standard day to experimental day
+plot_data$Exp_day <- (plot_data$standard_day * sE_first) + mE_first
+  
+plot_data$Species_ID <- with(plot_data, paste(Species, ID_new, sep = "_"))
+first_part$Species_ID <- with(first_part, paste(Species, ID_new, sep = "_"))
+# Subset it to only have the ID_new levels in the original dataset
+plot_data <- plot_data[which(plot_data$Species_ID %in% first_part$Species_ID),]
+# Create a Genus species column
+plot_data$G_S <- ifelse(plot_data$Species == levels(first_part$Species)[1], levels(first_part$G_S)[5], ifelse(plot_data$Species == levels(first_part$Species)[2], levels(first_part$G_S)[6], ifelse(plot_data$Species == levels(first_part$Species)[3], levels(first_part$G_S)[1], ifelse(plot_data$Species == levels(first_part$Species)[4], levels(first_part$G_S)[7], ifelse(plot_data$Species == levels(first_part$Species)[5], levels(first_part$G_S)[8], ifelse(plot_data$Species == levels(first_part$Species)[6], levels(first_part$G_S)[4], ifelse(plot_data$Species == levels(first_part$Species)[7], levels(first_part$G_S)[3], ifelse(plot_data$Species == levels(first_part$Species)[8], levels(first_part$G_S)[2], plot_data$Species))))))))
+
+# Create predictions for each column
+plot_data$predictions <- predict(mod, plot_data, re.form = ~ (1|ID_new), interval="predict", allow.new.levels = TRUE)
+
+##---- natural log
+ggplot(data = first_part, aes(y = log10(Bsal_load+1), x = Exp_day)) + 
+  geom_point(col= "gray") + 
+  geom_line(aes(group = ID_new), col = "gray")+
+  facet_wrap(~G_S)+
+  ylab(expression(paste(italic(Bsal), " infection intensity", sep = "")))+
+  xlab("Experimental Day") +
+  geom_line(data = plot_data, aes(y = predictions, 
+                x = Exp_day, col = ID_new), size = 0.5) + 
+    scale_y_continuous(breaks = c(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
+                     labels = c(0, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000, 10000000000))+
+  scale_color_manual(values = rep("black", times = length(unique(first_part$ID_new))))+
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 10, color = "black"), 
+        axis.text.y = element_text(size = 10, color = "black"), 
+        axis.title.y = element_text(size = 12, color = "black"), 
+        axis.title.x = element_text(size = 12, color = "black"),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        legend.position = "none",
+        strip.text = element_text(size=12, face = "italic"),
+        strip.background = element_rect(fill = "white"))
+#ggsave("Fig2.pdf", height = 8, width = 10)
+```
+
+Plot for Bsal v Bd
+```{r}
+# Create new dataset
+plot_data <- with(first_part, expand.grid(
+      standard_day = mean(standard_day, na.rm = TRUE), 
+      Species = levels(Species)[1], 
+      log10_Bd_t_minus_1 = seq(min(log10_Bd_t_minus_1, na.rm = TRUE), max(log10_Bd_t_minus_1, na.rm = TRUE), length = 100),
+      ID_new = levels(ID_new)[1]
+))
+# Create predictions for each column
+plot_data$predictions <- predict(mod, plot_data, re.form = ~ (1|ID_new), interval="predict")
+
+##---- natural log
+ggplot(data = first_part, aes(y = log10(Bsal_load+1), x = log10_Bd_t_minus_1)) + 
+  geom_point() + 
+  ylab(expression(paste(italic(Bsal), " infection intensity", sep = "")))+
+  xlab(expression(paste(italic(Bd), " infection intensity", sep = ""))) +
+  geom_line(data = plot_data, aes(y = predictions, 
+                x = log10_Bd_t_minus_1), size = 1) + 
+    scale_y_continuous(breaks = c(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
+                     labels = c(0, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000, 10000000000))+
+      scale_x_continuous(breaks = c(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
+                     labels = c(0, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000, 10000000000))+
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 10, color = "black"), 
+        axis.text.y = element_text(size = 10, color = "black"), 
+        axis.title.y = element_text(size = 12, color = "black"), 
+        axis.title.x = element_text(size = 12, color = "black"),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        legend.text.align = 0)+ 
+  scale_color_discrete(name = "Genus species",
+                       labels=expression(italic("Desmognathus fuscus"), italic("Desmognathus wrighti"),italic("Eurycea wilderae"),italic("Notophtalamus viridescens"),italic("Plethodon cinereus"),italic("Plethodon cylindraceus"),italic("Plethodon glutinosus"),italic("Plethodon montanus")))
+
+#ggsave("FigSX.pdf", height = 8, width = 10)
+```
+
+## Second inoculation: Bsal growth
+
+```{r}
+# Save the data into a new object before removing the controls
+second_part_all <- second_part
+# Remove all Control individuals
+second_part <- second_part[second_part$Treatment != "C",]
+# Remove the 1 Eurycea wilderae
+second_part <- second_part[-which(second_part$Species == "wilderae"),]
+# droplevels
+second_part <- droplevels(second_part)
+# Fit the model
+mod2 <- lmer(log10(Bsal_load+1) ~ 
+              (Treatment-1)*(Species-1)*standard_day + log10_Bd_t_minus_1+
+              (1|ID_new), 
+           data = second_part,
+           control=lmerControl(optimizer="bobyqa",
+                                optCtrl=list(maxfun=1e9)))
+
+summary(mod2)
+# Compare the slopes of Bsal over time among species
+lst = emmeans::emtrends(mod2, ~Species*Treatment, var= "standard_day")
+slopes <- multcomp::cld(lst)
+slopes
+```
+
+Plot
+```{r}
+##---- Make the plot
+# Combine genus species names
+second_part$G_S <- paste(second_part$Genus, second_part$Species, sep = " ")
+second_part$G_S <- as.factor(second_part$G_S)
+# Full name for treatments
+second_part$Treatment2 <- ifelse(second_part$Treatment == "D", "Double inoculation", "Single inoculation")
+
+# Create new dataset
+plot_data <- with(second_part, expand.grid(
+      standard_day = seq(min(standard_day), max(standard_day), length = 10), 
+      Species = levels(Species), 
+      log10_Bd_t_minus_1 = mean(log10_Bd_t_minus_1, na.rm = TRUE),
+      ID_new = levels(ID_new),
+      Treatment = levels(Treatment)
+))
+# Create unique Species ID column
+plot_data$Species_ID <- with(plot_data, paste(Species, ID_new, Treatment,sep = "_"))
+second_part$Species_ID <- with(second_part, paste(Species, ID_new, Treatment, sep = "_"))
+
+# Subset it to only have the ID_new levels in the original dataset
+plot_data <- plot_data[plot_data$Species_ID %in% second_part$Species_ID,]
+
+# Droplevels
+plot_data <- droplevels(plot_data)
+# Backtransform standard day to experimental day
+plot_data$Exp_day <- (plot_data$standard_day * sE_second) + mE_second
+# Full name for treatments
+plot_data$Treatment2 <- ifelse(plot_data$Treatment == "D", "Double inoculation", "Single inoculation")
+# Create a Genus species column
+plot_data$G_S <- ifelse(plot_data$Species == levels(first_part$Species)[1], levels(first_part$G_S)[5], ifelse(plot_data$Species == levels(first_part$Species)[2], levels(first_part$G_S)[6], ifelse(plot_data$Species == levels(first_part$Species)[3], levels(first_part$G_S)[1], ifelse(plot_data$Species == levels(first_part$Species)[4], levels(first_part$G_S)[7], ifelse(plot_data$Species == levels(first_part$Species)[5], levels(first_part$G_S)[8], ifelse(plot_data$Species == levels(first_part$Species)[6], levels(first_part$G_S)[4], ifelse(plot_data$Species == levels(first_part$Species)[7], levels(first_part$G_S)[3], ifelse(plot_data$Species == levels(first_part$Species)[8], levels(first_part$G_S)[2], plot_data$Species))))))))
+
+# Create predictions for each column
+plot_data$predictions <- predict(mod2, plot_data, type = "link", re.form = ~ (1|ID_new), allow.new.levels = TRUE)
+
+##---- natural log
+ggplot() + 
+  geom_point(data = second_part, aes(y = log10(Bsal_load+1), x = Exp_day), col= "gray") + 
+  geom_line(data = second_part, aes(group = ID_new, y = log10(Bsal_load+1), x = Exp_day), col = "gray")+
+  facet_grid(Treatment2~G_S)+
+  ylab(expression(paste(italic(Bsal), " infection intensity", sep = "")))+
+  xlab("Experimental Day") +
+  geom_line(data = plot_data, aes(y = predictions, 
+                x = Exp_day, col = ID_new), size = 0.5) + 
+    scale_y_continuous(breaks = c(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
+                     labels = c(0, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000, 10000000000))+
+  scale_color_manual(values = rep("black", times = length(unique(second_part$ID_new))))+
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 10, color = "black"), 
+        axis.text.y = element_text(size = 10, color = "black"), 
+        axis.title.y = element_text(size = 12, color = "black"), 
+        axis.title.x = element_text(size = 12, color = "black"),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        legend.position = "none",
+        strip.text = element_text(size=12, face = "italic"),
+        strip.background = element_rect(fill = "white"))
+
+ggsave("Fig3.pdf", height = 8, width = 13)
+```
+
+
+Plot for Bsal v Bd
+```{r}
+# Create new dataset
+plot_data <- with(second_part, expand.grid(
+      standard_day = mean(standard_day, na.rm = TRUE), 
+      Species = levels(Species)[1], 
+      log10_Bd_t_minus_1 = seq(min(log10_Bd_t_minus_1, na.rm = TRUE), max(log10_Bd_t_minus_1, na.rm = TRUE), length = 100),
+      ID_new = levels(ID_new)[1],
+      Treatment = levels(Treatment)[1]
+))
+# Create predictions for each column
+plot_data$predictions <- predict(mod2, plot_data, re.form = ~ (1|ID_new), all.new.levels = TRUE)
+
+##---- natural log
+ggplot(data = second_part, aes(y = log10(Bsal_load+1), x = log10_Bd_t_minus_1)) + 
+  geom_point() + 
+  ylab(expression(paste(italic(Bsal), " infection intensity", sep = "")))+
+  xlab(expression(paste(italic(Bd), " infection intensity", sep = ""))) +
+  geom_line(data = plot_data, aes(y = predictions, 
+                x = log10_Bd_t_minus_1), size = 1) + 
+    scale_y_continuous(breaks = c(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
+                     labels = c(0, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000, 10000000000))+
+      scale_x_continuous(breaks = c(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
+                     labels = c(0, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000, 10000000000))+
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 10, color = "black"), 
+        axis.text.y = element_text(size = 10, color = "black"), 
+        axis.title.y = element_text(size = 12, color = "black"), 
+        axis.title.x = element_text(size = 12, color = "black"),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        legend.text.align = 0)+ 
+  scale_color_discrete(name = "Genus species",
+                       labels=expression(italic("Desmognathus fuscus"), italic("Desmognathus wrighti"),italic("Eurycea wilderae"),italic("Notophtalamus viridescens"),italic("Plethodon cinereus"),italic("Plethodon cylindraceus"),italic("Plethodon glutinosus"),italic("Plethodon montanus")))
+
+ggsave("FigSY.pdf", height = 8, width = 10)
+```
+
+## Phase 1: Salamander body mass over 
+
+```{r}
+# Fit the model
+m_Mass <- lmer(Mass ~ 
+             standard_day*Species*Treatment+
+             (1|add), 
+           data = first_part_all,
+           control = lmerControl(optimizer="bobyqa",
+                                optCtrl=list(maxfun=1e6)))
+# Look at the summary
+summary(m_Mass)
+
+# Compare the slopes of Bsal over time among species
+lst = emmeans::emtrends(m_Mass, ~Species*Treatment, var= "standard_day")
+slopes <- multcomp::cld(lst)
+slopes
+```
+
+```{r}
+#--------- Plot model predictions
+first_part_all$G_S <- paste(first_part_all$Genus, first_part_all$Species, sep = " ")
+
+first_part_all$predictions <- predict(m_Mass, first_part_all, type = "response", allow.new.levels = TRUE)
+first_part_all$Treatment2 <- ifelse(first_part_all$Treatment == "C", "Control", "Exposed")
+
+##---- natural log
+first_part_all1 <- first_part_all[is.na(first_part_all$Mass) == FALSE,]
+
+ggplot(data = first_part_all1, aes(y = Mass, x = Exp_day)) + 
+  geom_point(col= "grey61") + 
+  geom_line(aes(group = ID_number), col = "grey61")+
+  facet_grid(Treatment2~G_S)+
+  ylab("Mass (g)")+
+  xlab("Experimental Day") +
+  geom_line(aes(y = predictions, 
+                x = Exp_day, col = as.factor(add))) +
+  scale_color_manual(values = rep("black", times = length(unique(first_part_all1$add))))+
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 10, color = "black"), 
+        axis.text.y = element_text(size = 10, color = "black"), 
+        axis.title.y = element_text(size = 12, color = "black"), 
+        axis.title.x = element_text(size = 12, color = "black"),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        legend.position = "none",
+        strip.text = element_text(size=14, face = "italic"),
+        strip.background = element_rect(fill = "white"))
+
+#setwd("/Users/Cici/Dropbox/Bsal_Summer_2015/Figs_2018/")
+ggsave("first_inoculation_mass_growth.pdf", height = 7, width = 20)
+
+```
+
+## Phase 2: Salamander growth
+
+```{r}
+# Remove the 1 Eurycea wilderae
+second_part_all <- second_part_all[-which(second_part_all$Species == "viridescens"),]
+
+second_part_all <- second_part_all[-which(second_part_all$Species == "wilderae"),]
+
+# droplevels
+second_part_all <- droplevels(second_part_all)
+second_part_all$add <- as.factor(second_part_all$add)
+  
+
+# Fit the model
+m2_Mass <- lmer(Mass ~ 
+              Treatment*Species*standard_day+ 
+              (1|add), data = second_part_all,
+           control=lmerControl(optimizer="bobyqa",
+                                optCtrl=list(maxfun=1e9)))
+
+summary(m2_Mass)
+
+# Compare slopes
+lst = emmeans::lstrends(m2_Mass, ~Species*Treatment, var= "standard_day")
+slopes <- multcomp::cld(lst)
+slopes
+
+##---- Make the plot
+second_part_all$predictions <- predict(m2_Mass, second_part_all, type = "response")
+
+library(plyr)
+col <- ddply(.data = second_part_all, .variable = c("add", "Treatment"), .fun = summarize, mean = mean(Bsal))
+
+col1 <- col$add
+col2 <- ifelse(col$Treatment == "D", "black", "grey77")
+
+Treatment2 <- numeric(nrow(second_part_all))
+
+for(i in 1:nrow(second_part_all)){
+  if(second_part_all$Treatment[i] == "D"){Treatment2[i] <- "Double Infected"}
+  if(second_part_all$Treatment[i] == "C"){Treatment2[i] <- "Control"}
+  if(second_part_all$Treatment[i] == "I"){Treatment2[i] <- "Single Infected"}
+
+}
+
+second_part_all$Treatment2 <- Treatment2
+second_part_all$Treatment2 <- as.factor(second_part_all$Treatment2)
+
+second_part_all$G_S <- paste(second_part_all$Genus, second_part_all$Species, sep = " ")
+
+##---- natural log
+second_part_all1 <- second_part_all[is.na(second_part_all$Mass) == FALSE,]
+
+ggplot(data = second_part_all1, aes(x = Exp_day, y = Mass)) + 
+  geom_point(col = "grey61")+
+  geom_line(aes(group = ID_number), col = "grey61")+
+  facet_grid(Treatment2~G_S)+
+  ylab("Mass (g)")+
+  xlab("Experimental Day")+
+  geom_line(aes(y = predictions, 
+                x = Exp_day, 
+                col = add)) + 
+  scale_colour_manual(values = rep("black", times = length(col2)), guide = FALSE) + 
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 10, color = "black"), 
+        axis.text.y = element_text(size = 10, color = "black"), 
+        axis.title.y = element_text(size = 12, color = "black"), 
+        axis.title.x = element_text(size = 12, color = "black"),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        strip.text = element_text(size=8, face = "italic"),
+        strip.background = element_rect(fill = "white"))
+
+```
+
+## Summary Tables & Stats
+
+```{r}
+Bsal2 <- Bsal[Bsal$Treatment != "C",]
+
+#---- Summary table
+library(plyr)
+
+# Sample size table
+# To calculate sample sizes for infected individuals, need to subtract the double infected treatment or else you will be double counting individuals
+ddply(.data = Bsal, .variable = c("Genus", "Species", "Treatment"), .fun = summarize, Number = length(unique(ID_number)))
+
+# Infection intensity when they died or on day 81
+Dead <- Bsal2[Bsal2$Census == 1 | Bsal2$Exp_day == 81, ]
+Dead$Num <- 1
+
+ddply(.data = Dead, .variable = c("Genus", "Species"), .fun = summarize, 
+      Bsal = mean(Bsal, na.rm = T), 
+      Bd = mean(Bd, na.rm = T), 
+      min_day = min(Exp_day, na.rm = T), 
+      max_day = max(Exp_day, na.rm = T), 
+      mean_day = mean(Exp_day, na.rm = T),
+      sd_day = sd(Exp_day, na.rm = T)/sqrt(length(Num)))
+
+ddply(.data = Dead, .variable = c("Genus", "Species"), .fun = summarize, 
+                      Bsal = sd(Bsal, na.rm = T)/sqrt(length(Num)), 
+                      Bd = sd(Bd, na.rm = T)/sqrt(length(Num)))
+
+# Sample size
+ddply(.data = second_part, .variable = c("Genus", "Species", "Treatment"), .fun = summarize, Number = length(unique(ID_number)))
+
+# The proportion of Bd positives in first phase
+phase1 <- Bsal[Bsal$Phase  < 42, ]
+phase1_NC <- phase1[phase1$Treatment != "C",]
+length(which(phase1_NC$Bd_load > 0))/nrow(phase1_NC)
+
+# The proportion of Bd positives in second phase
+phase2 <- Bsal[Bsal$Exp_day > 42, ]
+phase2_NC <- phase2[phase2$Treatment != "C",]
+length(which(phase2_NC$Bd_load > 0))/nrow(phase2_NC)
+
+```
+
+## Survival analysis
+
+```{r}
+#------------- Reading in data
+
+Bsal <- read.table("~/Dropbox/Bsal_Summer_2015/Data/GVDBsal_Experiment_MASTER_25FEB2016.txt", header = T, sep = "\t")
+
+#--- Remove 2 individuals never infected
+
+Bsal<- Bsal[-which(Bsal$Species == "cylindraceus" & Bsal$ID_number == 6),]
+Bsal<- Bsal[-which(Bsal$Species == "viridescens" & Bsal$ID_number == 10),]
+Bsal<- Bsal[Bsal$Treatment != "C",]
+
+Bsal <- droplevels(Bsal)
+
+Bsal <- Bsal[is.na(Bsal$Genus) == FALSE,]
+Bsal <- Bsal[is.na(Bsal$Exp_day) == FALSE,]
+
+
+#----- Number Euthanized
+
+Bsal1 <- Bsal[Bsal$Census == 1,]
+
+length(which(Bsal1$Exp_day > 83))
+nrow(Bsal1)
+#----- Assign unique values to each salamander
+df <- unique(data.frame(Species = (Bsal$Species), ID_number = Bsal$ID_number))
+
+values <- data.frame(df, add = round(seq(1, 750, length = nrow(df))))
+
+BS <- merge(Bsal, values, all = TRUE)
+
+BS$ID_new <- as.numeric(BS$Species) + as.numeric(BS$ID_number) * BS$add
+
+BS$ID_new <- as.factor(BS$ID_new)
+
+length(unique(BS$ID_new))
+
+Bsal <- BS
+
+#----- Make ID number factor
+Bsal$ID_number <- as.factor(Bsal$ID_number)
+Bsal$ID_new <- as.factor(Bsal$ID_new)
+
+length(unique(BS$ID_new))
+
+Bsal <- BS
+
+#------ Survival analysis
+library(survival)
+library(RVAideMemoire)
+
+survdiff(Surv(Exp_day, Census)~ Species, data = Bsal, rho = 0)
+
+chisq <- matrix(0, 8, 8) 
+for (i in 1:8) { 
+  for (j in (1:8)[-i]) { 
+    temp <- survdiff(Surv(Exp_day, Census) ~ Species, data=Bsal, 
+                     subset=(Species %in% (unique(Species))[c(i,j)])) 
+    chisq[i,j] <- 1 - pchisq(temp$chisq, length(temp$n) - 1)
+  } 
+} 
+
+rownames(chisq) <- unique(Bsal$Species)
+colnames(chisq) <- unique(Bsal$Species)
+
+for(i in 1:8){
+  chisq[i, i:8] <- NA
+}
+
+matrix(p.adjust(chisq, "bonferroni"), byrow = F, ncol = 8, nrow = 8)
+
+frog.surv <- survfit(Surv(Exp_day, Census) ~ Species, data = Bsal) 
+# Creates a survival summary used to plot the curves
+
+par(mar = c(5, 5, 5, 5))
+plot(frog.surv, ylab = "Proportion surviving", xlab = "Experimental day",  lty = c(1, 2, 3, 4, 5, 6, 7, 8), lwd = c(2, 2, 2, 2, 2, 2, 2, 2), xlim = c(0,84), las = 1, col = c("black", "gray78", "gray68", "gray58", "gray48", "gray38", "gray28", "gray18"), cex.lab = 1.5, cex.axis = 1.5, mark = "")
+
+legend("bottomright", 
+       c(expression(italic("Plethodon cinerus")),
+                    expression(italic("Plethodon cylindraceus")),
+            expression(italic("Desmognathus fuscus")), 
+          expression(italic("Plethodon glutinosus")), 
+          expression(italic("Plethodon montanus")),
+        expression(italic("Desmognathus wrighti")),
+       expression(italic("Eurycea wilderae")),
+       expression(italic("Notophtalamus viridescens"))), 
+       lty = c(1, 2, 3, 4, 5, 6, 7, 8), 
+       lwd = c(2, 2, 2, 2, 2, 2, 2, 2), 
+       col =c("black", "gray78", "gray68", "gray58", "gray48", "gray38", "gray28", "gray18"))
+
+```
