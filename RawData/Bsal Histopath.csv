@@ -1,0 +1,61 @@
+﻿KRL #,ZSSD #,Species,Treatment,ZSSD Bd PCR,ZSSD Bsal PCR,# Cross Sections,Bd-type,Bd Gr 1,Bd Gr 2,Bd Gr 3,Bsal type,# Bsal Foci,# Bsal Gr 1,# Bsal Gr 2,# Bsal gr 3,# Bsal Grade 4,Comment
+2404,RP23096,D. fuscus,C,Negative,Negative,17,0,0,0,0,0,0,0,0,0,0,
+2481,RP23224,D. fuscus,C,,,29,0,0,0,0,0,0,0,0,0,0,
+2438,RP23098,D. fuscus,D,Negative,Negative,26,0,0,0,0,0,0,0,0,0,0,
+2449,RP23228,D. fuscus,D,,,24,0,0,0,0,0,0,0,0,0,0,
+2475,RP23064,D. fuscus,D,,,21,0,0,0,0,0,0,0,0,0,0,
+2428,RP23097,D. fuscus,I,Negative,Negative,21,0,0,0,0,0,0,0,0,0,0,
+2456,RP23222,D. fuscus,I,,,31,0,0,0,0,0,0,0,0,0,0,
+2418,RP23223,D. organi,C,,,24,0,0,0,0,0,0,0,0,0,0,
+2463,RP23099,D. organi,C,Negative,Negative,24,0,0,0,0,0,0,0,0,0,0,
+2439,RP23226,D. organi,D,,,24,0,0,0,0,0,0,0,0,0,0,
+2445,RP23227,D. organi,D,,,23,0,0,0,0,0,0,0,0,0,0,
+2474,RP23065,D. organi,D,,,21,0,0,0,0,0,0,0,0,0,0,
+2452,RP23100,D. organi,I,Negative,Negative,19,0,0,0,0,0,0,0,0,0,0,
+2469,RP23101,D. organi,I,Negative,Negative,27,0,0,0,0,0,0,0,0,0,0,
+2470,RP23225,D. organi,I,,,21,0,0,0,0,0,0,0,0,0,0,
+2448,RP23221,D. organi,D,,,24,0,0,0,0,0,0,0,0,0,0,
+2443,RP23102,Eurycea,C,Negative,Negative,21,0,0,0,0,0,0,0,0,0,0,
+2440,RP23103,Eurycea,I,Negative,Positive,19,0,0,0,0,0,0,0,0,0,0,
+2480,2480,Eurycea,I,,,21,1,1,0,0,1,29,9,7,3,10,Significant infection; probably lethal
+2467,RP23104,N. viridescens,C,Positive,Negative,26,1,1,0,0,0,0,0,0,0,0,
+2476,RP23066,N. viridescens,I,,,22,1,0,0,1,0,0,0,0,0,0,
+2481,2481,N. viridescens,I,,,30,1,1,,,1,136,17,13,50,56,Significant infection; probably lethal
+2482,RP23117,N. viridescens,I,,,22,1,0,1,0,1,72,17,16,21,18,Significant infection; probably lethal
+2483,2483,N. viridescens,I,,,20,1,0,1,0,1,49,15,10,14,10,Significant infection; probably lethal
+2485,RP23157,N. viridescens,I,Positive,Positive,25,1,0,1,0,1,107,15,18,31,43,Significant infection; probably lethal
+2486,2486,N. viridescens,C,,,29,1,1,0,0,0,,,,,,
+2487,RP23118,N. viridescens,I,Positive,Positive,31,1,0,1,0,1,65,12,8,13,32,Significant infection; probably lethal
+2488,2488,N. viridescens,I,Positive,Positive,Autolyzed,,,,,,,,,,,
+2489,RP23156,N. viridescens,C,,,29,1,0,0,1,0,0,0,0,0,0,
+2490,2490,N. viridescens,I,Positive,Negative,27,1,0,1,0,0,0,0,0,0,0,
+2491,RP23119,N. viridescens,I,Positive,Positive,26,1,0,1,0,1,3,0,0,2,1,Significant infection; probably lethal
+2492,RP23120,N. viridescens,I,Positive,Positive,Autolyzed,,,,,,,,,,,
+2451,RP23108,P. cinereus,C,Negative,Positive,29,0,0,0,0,0,0,0,0,0,0,
+2454,RP23107,P. cinereus,D,Negative,Negative,20,0,0,0,0,1,2,0,1,1,0,Minimal # Bsal lesions compared to Notophthalmus; Not lethal/incidental
+2444,RP23106,P. cinereus,I,Negative,Positive,25,0,0,0,0,0,0,0,0,0,0,
+2478,RP23060,P. cinereus,I,Negative,Negative,27,0,0,0,0,1,2,2,0,0,0,Minimal # Bsal lesions compared to Notophthalmus; Not lethal/incidental
+2421,RP23151,P. cylindraceus,C,,,35,0,0,0,0,0,0,0,0,0,0,
+2482,RP23109,P. cylindraceus,C,Negative,Negative,44,0,0,0,0,0,0,0,0,0,0,
+2457,RP23111,P. cylindraceus,D,Negative,Negative,30,0,0,0,0,1,1,1,0,0,0,Minimal # Bsal lesions compared to Notophthalmus; Not lethal/incidental
+2409,RP23110,P. cylindraceus,I,Negative,Negative,40,0,0,0,0,0,0,0,0,0,0,
+2405,RP23233,P. glutinosis,C,,,30,0,0,0,0,0,0,0,0,0,0,
+2441,RP23238,P. glutinosis,C,,,37,0,0,0,0,0,0,0,0,0,0,
+2472,RP23113,P. glutinosis,C,Negative,Negative,38,0,0,0,0,0,0,0,0,0,0,
+2408,RP23112,P. glutinosis,D,Negative,Negative,33,0,0,0,0,0,0,0,0,0,0,
+2425,RP23236,P. glutinosis,D,,,33,0,0,0,0,1,1,1,0,0,0,Minimal # Bsal lesions compared to Notophthalmus; Not lethal/incidental
+2442,RP23237,P. glutinosis,D,,,40,0,0,0,0,0,0,0,0,0,0,
+2471,RP23231,P. glutinosis,D,,,36,0,0,0,0,0,0,0,0,0,0,
+2477,RP23232,P. glutinosis,D,,,21,,,,,1,2,0,0,0,0,Equivocal Bd vs Bsal; favor Bsal; Not lethal/incidental
+2416,RP23229,P. glutinosis,I,,,35,1,1,0,0,0,0,0,0,0,0,"Minimal Bd-type lesion (single thallus); favor Bd, cannot r/o Bsal"
+2423,RP23114,P. glutinosis,I,Negative,Negative,29,0,0,0,0,0,0,0,0,0,0,
+2427,RP23230,P. glutinosis,I,,,34,0,0,0,0,0,0,0,0,0,0,
+2432,RP23234,P. glutinosis,I,,,26,,,,,1,1,0,0,0,0,Equivocal Bd vs Bsal; favor Bsal; Not lethal/incidental
+2448,RP23235,P. glutinosis,I,,,37,0,0,0,0,0,0,0,0,0,0,
+2479,RP23063,P. glutinosis,I,,,23,0,0,0,0,1,1,1,0,0,0,Minimal # Bsal lesions compared to Notophthalmus; Not lethal/incidental
+2412,RP23115,P. montanus,C,Negative,Negative,36,0,0,0,0,0,0,0,0,0,0,
+2476,RP23105,P. montanus,C,Negative,Negative,31,0,0,0,0,0,0,0,0,0,0,
+2407,RP23062,P. montanus,D,Negative,Positive,26,1,0,1,0,0,0,0,0,0,0,
+2417,RP23116,P. montanus,D,Negative,Positive,40,1,1,0,0,0,0,0,0,0,0,
+2414,RP23061,P. montanus,I,,,27,1,1,0,0,1,1,1,0,0,0,Minimal # Bsal lesions compared to Notophthalmus; Not lethal/incidental
+2478,RP23067,P. montanus,I,,,24,0,0,0,0,1,1,1,0,0,0,Minimal # Bsal lesions compared to Notophthalmus; Not lethal/incidental
