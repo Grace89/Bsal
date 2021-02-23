@@ -1,14 +1,15 @@
 #####################################
 ##### The following R script was written by G. V. DiRenzo
-### Please send questions to: grace.direnzo@gmail.com
+### Please send questions to: gdirenzo@umass.edu
 #####################################
 
 
 
 
 # Objective: 
-  # 1. To recreate all analyses and figures from the Bsal experiment with 8 salamanders collected from the eastern USA
+  # To recreate all analyses and figures from the Bsal experiment with 8 salamander species collected from the eastern USA
 
+  # The table of contents provides a general idea of what is occuring in each section of code, along with what figures or tables (corresponding to those found in the manuscript) are created in each section
 
 
 
@@ -19,7 +20,7 @@
 # 1. Set working directory & download libraries
 # 2. Read in the data
 # 3. Format data
-# 4. Bd  summary
+# 4. Bd summary
 # 5. Figure S1. Bd load over time 
 # 6. Bsal exposure summary 
 # 7. Day 3 and 4 averages
@@ -89,7 +90,7 @@ library(AICcmodavg)
 
 
 # Read in data
-  # This file has infection intensity of chytrids over time
+  # This file has infection intensity of chytrids over time along with other individual level information
   # The phylogeny and histology data will be read in later
 Bsal <- read.table("./Data/GVDBsal_Experiment_MASTER_25FEB2016.txt", 
                    header = T, sep = "\t")
@@ -146,7 +147,7 @@ str(Bsal)
 colnames(Bsal)[2] <- "Month"
 
 
-# Fix names
+# Fix species names
   # Change the name of D. organi to D. wrighti
   # Change the name of E. sp to E. wilderae
 Bsal$Species <- as.character(Bsal$Species)
@@ -464,11 +465,16 @@ field$ln_mass <- log(field$Mass)
 field$ln_SVL <- log(field$SVL)
 
 
-# Fit a linear model
+# Fit a linear model to ln(mass) ~ ln(SVL) with each species having a unique slope & intercept
+  # Model fit using just the data collected on the 1st day in the field
 # We use a SVL*Species interactions- so that all species have their own intercept & slope
 SMI <- lm(ln_mass ~ ln_SVL*(Species-1), data = field)
 
+# Look at the output
+summary(SMI)
 
+
+# Looking at the rest of the dataset- include a few transformed columns
 # Log transform Mass and SVL
 Bsal$ln_mass <- log(Bsal$Mass)
 Bsal$ln_SVL <- log(Bsal$SVL)
@@ -480,8 +486,7 @@ Bsal$BC_pred <- predict(SMI, Bsal, type = "response")
 Bsal$BC <- Bsal$BC_pred - Bsal$ln_mass
 
 
-# Look at the output
-summary(SMI)
+
 
 
 
@@ -1007,18 +1012,14 @@ plot_data.1 <- plot_data.1[plot_data.1$ID_new == unique(plot_data.1$ID_new)[1],]
 # Fig 5. in main text
 # Make plot
 ggplot() + 
-  geom_jitter(data = first_part.v1, aes(y = log10(Bsal_load+1), x = log10_Bd_t_minus_1), width = 0.05, height = 0.5) + 
+  geom_jitter(data = first_part.v1, aes(y = log10(Bsal_load+1), x = log10_Bd_t_minus_1), width = 0.05, height = 0.05) + 
   geom_line(data = plot_data.1, aes(y = Bsal_load, 
                                  x = log10_Bd_t_minus_1), size = 0.5) + 
   geom_ribbon(data = plot_data.1, aes(ymin = lower, 
                                     ymax = upper,
                                     x = log10_Bd_t_minus_1), alpha = 0.3)+ 
-  ylab(expression(paste(italic(Bsal), " infection intensity at time ", italic(t), sep = "")))+
-  xlab(expression(paste(italic(Bd), " infection intensity at time ", italic(t - 1), sep = ""))) +
-  scale_y_continuous(breaks = c(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
-                     labels = c(0, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000, 10000000000))+
-  scale_x_continuous(breaks = c(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
-                     labels = c(0, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000, 10000000000))+
+  ylab(expression(paste(log[10], "(", italic(Bsal), " infection intensity at time ", italic(t), ")", sep = "")))+
+  xlab(expression(paste(log[10], "(", italic(Bd), " infection intensity at time ", italic(t - 1), ")", sep = "")))+
   theme_bw()+
   theme(axis.text.x = element_text(size = 16, color = "black"), 
         axis.text.y = element_text(size = 16, color = "black"), 
@@ -1384,8 +1385,21 @@ slopes
 # Droplevels
 second_part_all.v1 <- droplevels(second_part_all.v1)
 
+
+# Refit the model but without treatment because it was not significant
+# Fit the model
+mod.BC.2.2 <- lme(BC ~ 
+                  standard_day+
+                  Species+
+                  standard_day:Species,
+                random = ~1|ID_new, 
+                data = second_part_all.v1,
+                control=glmerControl(optimizer="bobyqa",
+                                     optCtrl=list(maxfun=1e9)))
+
+
 # Create predictions for each column
-second_part_all.v1$predictions <- predict(mod.BC.2, 
+second_part_all.v1$predictions <- predict(mod.BC.2.2, 
                                  second_part_all.v1, 
                                  re.form = ~ (1|ID_new), 
                                  allow.new.levels = TRUE)
