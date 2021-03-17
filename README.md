@@ -14,4 +14,5 @@ Emerging infectious diseases are among the leading drivers of the sixth mass ext
 ### [DataAnalysis](https://github.com/Grace89/Bsal/tree/master/DataAnalysis): Contains code for modeling, analysis, and results
 ### [RawData](https://github.com/Grace89/Bsal/tree/master/RawData): Contains CSV file of raw data
 ### [Figures](https://github.com/Grace89/Bsal/tree/master/Figures): Contains pdf versions of all figures
+### [Tables](https://github.com/Grace89/Bsal/tree/master/Tables): Contains csv and xlsx versions of all tables
 ### [FinalPaper](): Contains all material published online
