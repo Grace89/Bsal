@@ -1,0 +1,15 @@
+"","Genus","Species","Treatment","samp_size","Bsal","Bsal_se","Bd","Bd_s"
+"1","Desmognathus","fuscus","I",5,0,0,0,0
+"2","Desmognathus","fuscus","D",5,3.6169013325,2.411267555,26.715254175,17.81016945
+"3","Desmognathus","wrighti","I",5,0,0,0,0
+"4","Desmognathus","wrighti","D",6,711.719142166667,525.63942220696,0,0
+"5","Eurycea","wilderae","I",2,0,NA,0,NA
+"6","Notophtalamus","viridescens","I",10,211008.9485885,93399.3698818665,856068.1170498,382480.461486901
+"7","Plethodon","cinereus","I",3,106.585489286667,63.4516097462336,0,0
+"8","Plethodon","cinereus","D",4,3653.067243035,1886.01197385424,0,0
+"9","Plethodon","cylindraceus","I",4,23.437003664,11.1729728513651,0,0
+"10","Plethodon","cylindraceus","D",6,1074.264820175,738.722240597451,0,0
+"11","Plethodon","glutinosus","I",6,7.76766657,5.23695973315432,0,0
+"12","Plethodon","glutinosus","D",5,56.415034346,36.774976247458,0,0
+"13","Plethodon","montanus","I",5,2845.085579,1544.00870513554,0,0
+"14","Plethodon","montanus","D",4,542.82016775,383.831821580844,0,0
